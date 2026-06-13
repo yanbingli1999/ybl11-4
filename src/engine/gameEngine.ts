@@ -6,6 +6,9 @@ import {
   Position,
   Tile,
   InventoryItem,
+  ResonanceEffect,
+  CategoryResonance,
+  RelicCategory,
 } from '../types/game';
 import { generateRoomTemplate, TUTORIAL_ROOM } from '../data/rooms';
 import { getRandomRelic, RELICS } from '../data/relics';
@@ -255,6 +258,7 @@ export function movePlayer(game: GameState, direction: Direction): GameState {
   checkRelic(newGame);
   checkEntranceExit(newGame);
   updateVisibility(newGame);
+  applyResonanceEffects(newGame);
 
   if (newGame.player.stamina <= 0) {
     newGame.player.stamina = 0;
@@ -327,6 +331,7 @@ function checkRelic(game: GameState) {
           id: `inv_${Date.now()}_${Math.random()}`,
           relicId: relicData.id,
           name: relicData.name,
+          category: relicData.category,
           weight: relicData.weight,
           value: relicData.value,
           isGenuine: null,
@@ -380,14 +385,38 @@ function checkEntranceExit(game: GameState) {
 }
 
 export function calculateEscapeValue(game: GameState): number {
+  const resonance = calculateResonance(game.player.inventory);
   let total = 0;
+
+  const categoryValue: Record<string, number> = {};
+
   for (const item of game.player.inventory) {
+    let itemValue = item.value;
     if (item.appraised && item.isGenuine === false) {
-      total += Math.floor(item.value * 0.2);
+      itemValue = Math.floor(item.value * 0.2);
+    }
+
+    if (item.appraised && item.isGenuine === true) {
+      const cat = item.category;
+      categoryValue[cat] = (categoryValue[cat] || 0) + itemValue;
     } else {
-      total += item.value;
+      total += itemValue;
     }
   }
+
+  for (const resonanceInfo of resonance.categoryResonances) {
+    const cat = resonanceInfo.category;
+    const value = categoryValue[cat] || 0;
+    total += Math.floor(value * resonanceInfo.multiplier);
+  }
+
+  for (const [cat, value] of Object.entries(categoryValue)) {
+    const hasResonance = resonance.categoryResonances.some(r => r.category === cat);
+    if (!hasResonance) {
+      total += value;
+    }
+  }
+
   return total;
 }
 
@@ -629,20 +658,30 @@ export function appraiseItem(game: GameState, itemId: string): GameState {
 
   newGame.player.stamina -= 10;
 
+  const resonance = calculateResonance(newGame.player.inventory);
   const relicData = RELICS.find((r) => r.id === item.relicId);
-  const difficulty = relicData?.appraisalDifficulty || 50;
+  const baseDifficulty = relicData?.appraisalDifficulty || 50;
+  const difficulty = Math.min(95, baseDifficulty + resonance.fakeInterference);
   const success = Math.random() * 100 > difficulty;
 
   if (success) {
     item.appraised = true;
     item.isGenuine = relicData?.isGenuine ?? false;
     if (item.isGenuine) {
-      newGame.message = `鉴定成功！${item.name} 是真品！价值 ${item.value} 金币。`;
+      const newResonance = calculateResonance(newGame.player.inventory);
+      let bonusMsg = '';
+      if (newResonance.categoryResonances.length > 0) {
+        bonusMsg = ` 同类共鸣生效，结算倍率提升！`;
+      }
+      newGame.message = `鉴定成功！${item.name} 是真品！价值 ${item.value} 金币。${bonusMsg}`;
     } else {
       newGame.message = `鉴定成功！很遗憾，${item.name} 是赝品，只值 ${Math.floor(item.value * 0.2)} 金币。`;
     }
   } else {
-    newGame.message = '鉴定失败，无法判断真伪。再试试？';
+    const interferenceMsg = resonance.fakeInterference > 0
+      ? `（赝品干扰增加了 ${resonance.fakeInterference} 点难度）`
+      : '';
+    newGame.message = `鉴定失败，无法判断真伪。再试试？${interferenceMsg}`;
   }
 
   return newGame;
@@ -687,5 +726,89 @@ export function rest(game: GameState): GameState {
     newGame.message = '休息片刻，恢复了20点体力。';
   }
 
+  for (let i = 0; i < 3; i++) {
+    applyResonanceEffects(newGame);
+  }
+
+  const resonance = calculateResonance(newGame.player.inventory);
+  if (resonance.jadeCurseActive) {
+    const totalCurse = resonance.jadeCursePerTurn * 3;
+    newGame.message += ` 玉咒共鸣使诅咒增加了 ${totalCurse} 点！`;
+  }
+
   return newGame;
+}
+
+export function calculateResonance(inventory: InventoryItem[]): ResonanceEffect {
+  const categoryGenuineCount: Record<string, number> = {};
+  let fakeCount = 0;
+  let genuineCount = 0;
+  let hasJade = false;
+  let hasHighCurse = false;
+  let totalCurseLevel = 0;
+
+  for (const item of inventory) {
+    if (item.appraised && item.isGenuine === false) {
+      fakeCount++;
+    }
+    if (item.appraised && item.isGenuine === true) {
+      genuineCount++;
+      const cat = item.category;
+      categoryGenuineCount[cat] = (categoryGenuineCount[cat] || 0) + 1;
+    }
+    if (!item.appraised || item.isGenuine !== false) {
+      totalCurseLevel += item.curseLevel;
+    }
+    if (item.category === 'jade' && (item.isGenuine === true || !item.appraised)) {
+      hasJade = true;
+    }
+    if (item.curseLevel >= 3 && (item.isGenuine === true || !item.appraised)) {
+      hasHighCurse = true;
+    }
+  }
+
+  const categoryResonances: CategoryResonance[] = [];
+  let totalMultiplier = 1;
+
+  for (const [category, count] of Object.entries(categoryGenuineCount)) {
+    if (count >= 2) {
+      let multiplier = 1;
+      if (count === 2) multiplier = 1.2;
+      else if (count === 3) multiplier = 1.4;
+      else if (count === 4) multiplier = 1.7;
+      else multiplier = 2.0;
+
+      categoryResonances.push({
+        category: category as RelicCategory,
+        count,
+        multiplier,
+      });
+      totalMultiplier += (multiplier - 1);
+    }
+  }
+
+  const jadeCurseActive = hasJade && hasHighCurse;
+  let jadeCursePerTurn = 0;
+  if (jadeCurseActive) {
+    jadeCursePerTurn = Math.max(1, Math.floor(totalCurseLevel / 5));
+  }
+
+  const fakeInterference = fakeCount * 8;
+
+  return {
+    categoryResonances,
+    totalMultiplier,
+    jadeCurseActive,
+    jadeCursePerTurn,
+    fakeInterference,
+    fakeCount,
+    genuineCount,
+  };
+}
+
+function applyResonanceEffects(game: GameState) {
+  const resonance = calculateResonance(game.player.inventory);
+  if (resonance.jadeCurseActive && resonance.jadeCursePerTurn > 0) {
+    game.player.curse += resonance.jadeCursePerTurn;
+  }
 }

@@ -11,6 +11,27 @@ export type TileType =
   | 'torch'
   | 'chest';
 
+export type RelicCategory =
+  | 'jade'
+  | 'bronze'
+  | 'gold'
+  | 'ceramic'
+  | 'scroll'
+  | 'stone'
+  | 'weapon'
+  | 'crystal';
+
+export const CATEGORY_NAMES: Record<RelicCategory, string> = {
+  jade: '玉器',
+  bronze: '青铜器',
+  gold: '金器',
+  ceramic: '陶瓷',
+  scroll: '文书',
+  stone: '石雕',
+  weapon: '兵器',
+  crystal: '水晶',
+};
+
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
 export interface Position {
@@ -62,6 +83,7 @@ export interface Relic {
   id: string;
   name: string;
   description: string;
+  category: RelicCategory;
   weight: number;
   value: number;
   isGenuine: boolean;
@@ -98,6 +120,7 @@ export interface InventoryItem {
   id: string;
   relicId: string;
   name: string;
+  category: RelicCategory;
   weight: number;
   value: number;
   isGenuine: boolean | null;
@@ -150,4 +173,20 @@ export interface ExpeditionRecord {
   relicsCollected: number;
   survived: boolean;
   causeOfDeath?: string;
+}
+
+export interface CategoryResonance {
+  category: RelicCategory;
+  count: number;
+  multiplier: number;
+}
+
+export interface ResonanceEffect {
+  categoryResonances: CategoryResonance[];
+  totalMultiplier: number;
+  jadeCurseActive: boolean;
+  jadeCursePerTurn: number;
+  fakeInterference: number;
+  fakeCount: number;
+  genuineCount: number;
 }

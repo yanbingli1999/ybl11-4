@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { InventoryItem } from '../types/game';
+import { InventoryItem, CATEGORY_NAMES } from '../types/game';
+import { calculateResonance } from '../engine/gameEngine';
 
 interface InventoryPanelProps {
   inventory: InventoryItem[];
@@ -17,6 +18,7 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
 
   const selectedItemData = inventory.find((i) => i.id === selectedItem);
+  const resonance = calculateResonance(inventory);
 
   return (
     <div
@@ -80,6 +82,57 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({
         </div>
       )}
 
+      <div
+        style={{
+          backgroundColor: '#1a1a2e',
+          padding: '10px',
+          borderRadius: '6px',
+          marginBottom: '12px',
+          fontSize: '12px',
+        }}
+      >
+        <div style={{ fontWeight: 'bold', marginBottom: '6px', color: '#c0c0ff' }}>
+          ✨ 文物共鸣效果
+        </div>
+
+        {resonance.categoryResonances.length > 0 && (
+          <div style={{ marginBottom: '6px' }}>
+          <div style={{ color: '#4ade80', marginBottom: '4px' }}>
+            📈 同类真品共鸣 (总倍率: {(resonance.totalMultiplier).toFixed(2)}x)
+          </div>
+          {resonance.categoryResonances.map((r, idx) => (
+            <div key={idx} style={{ color: '#aaa', marginLeft: '8px' }}>
+              • {CATEGORY_NAMES[r.category]} ×{r.count}件 → {r.multiplier.toFixed(1)}x
+            </div>
+          ))}
+        </div>
+        )}
+
+        {resonance.jadeCurseActive && (
+          <div style={{ color: '#f87171', marginBottom: '6px' }}>
+            ☠️ 玉咒共鸣：每回合 +{resonance.jadeCursePerTurn} 诅咒
+          </div>
+        )}
+
+        {resonance.fakeInterference > 0 && (
+          <div style={{ color: '#fbbf24', marginBottom: '6px' }}>
+            🎭 赝品干扰：鉴定难度 +{resonance.fakeInterference}
+          </div>
+        )}
+
+        {resonance.categoryResonances.length === 0 &&
+         !resonance.jadeCurseActive &&
+         resonance.fakeInterference === 0 && (
+          <div style={{ color: '#666', fontStyle: 'italic' }}>
+            暂无特殊共鸣效果
+          </div>
+        )}
+
+        <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid #333', color: '#888' }}>
+          已鉴定真品: {resonance.genuineCount}件 | 已鉴定赝品: {resonance.fakeCount}件
+        </div>
+      </div>
+
       {selectedItemData && (
         <div
           style={{
@@ -91,6 +144,9 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({
         >
           <div style={{ fontSize: '16px', marginBottom: '8px' }}>
             {selectedItemData.icon} <strong>{selectedItemData.name}</strong>
+          </div>
+          <div style={{ color: '#c0c0ff', marginBottom: '6px', fontSize: '12px' }}>
+            📦 {CATEGORY_NAMES[selectedItemData.category]}
           </div>
           <div style={{ color: '#aaa', marginBottom: '6px' }}>
             重量: {selectedItemData.weight} | 价值: {selectedItemData.value}金
