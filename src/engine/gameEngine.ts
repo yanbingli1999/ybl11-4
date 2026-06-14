@@ -130,6 +130,16 @@ export function createInitialGame(): GameState {
 }
 
 export function createGameFromSaved(saved: GameState): GameState {
+  for (const item of saved.player.inventory) {
+    if (!item.category) {
+      const relicData = RELICS.find((r) => r.id === item.relicId);
+      if (relicData) {
+        item.category = relicData.category;
+      } else {
+        item.category = 'bronze';
+      }
+    }
+  }
   updateVisibility(saved);
   return saved;
 }
@@ -736,6 +746,11 @@ export function rest(game: GameState): GameState {
     newGame.message += ` 玉咒共鸣使诅咒增加了 ${totalCurse} 点！`;
   }
 
+  if (newGame.player.curse >= newGame.player.maxCurse) {
+    newGame.status = 'defeat';
+    newGame.message = '诅咒侵蚀了你的灵魂...';
+  }
+
   return newGame;
 }
 
@@ -748,9 +763,15 @@ export function calculateResonance(inventory: InventoryItem[]): ResonanceEffect 
   let totalCurseLevel = 0;
 
   for (const item of inventory) {
+    const relicData = RELICS.find((r) => r.id === item.relicId);
+    const actualGenuine = relicData ? relicData.isGenuine : (item.isGenuine !== false);
+
     if (item.appraised && item.isGenuine === false) {
       fakeCount++;
+    } else if (!item.appraised && !actualGenuine) {
+      fakeCount++;
     }
+
     if (item.appraised && item.isGenuine === true) {
       genuineCount++;
       const cat = item.category;

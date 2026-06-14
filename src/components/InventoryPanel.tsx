@@ -102,7 +102,7 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({
           </div>
           {resonance.categoryResonances.map((r, idx) => (
             <div key={idx} style={{ color: '#aaa', marginLeft: '8px' }}>
-              • {CATEGORY_NAMES[r.category]} ×{r.count}件 → {r.multiplier.toFixed(1)}x
+              • {CATEGORY_NAMES[r.category] || '未知'} ×{r.count}件 → {r.multiplier.toFixed(1)}x
             </div>
           ))}
         </div>
@@ -146,7 +146,7 @@ export const InventoryPanel: React.FC<InventoryPanelProps> = ({
             {selectedItemData.icon} <strong>{selectedItemData.name}</strong>
           </div>
           <div style={{ color: '#c0c0ff', marginBottom: '6px', fontSize: '12px' }}>
-            📦 {CATEGORY_NAMES[selectedItemData.category]}
+            📦 {CATEGORY_NAMES[selectedItemData.category] || '未知'}
           </div>
           <div style={{ color: '#aaa', marginBottom: '6px' }}>
             重量: {selectedItemData.weight} | 价值: {selectedItemData.value}金
